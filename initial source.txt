@@ -1,0 +1,358 @@
+Source:
+<html><base href="">
+<head>
+    <title>Virtual 3D Home Environment with AI Assistant</title>
+    <!-- Include Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Include OrbitControls.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
+    <!-- Include dat.GUI from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/dat.gui/build/dat.gui.min.js"></script>
+    <!-- Include Tween.js for simple animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/Tween.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #gui-container { position: absolute; top: 0; right: 0; }
+        #chat-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            display: flex;
+            background: rgba(0, 0, 0, 0.5);
+        }
+        #chat-input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.8);
+        }
+        #chat-button {
+            padding: 10px;
+            border: none;
+            background: #3498db;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #response-container {
+            position: absolute;
+            bottom: 50px;
+            left: 20px;
+            max-width: 300px;
+            padding: 10px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 5px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gui-container"></div>
+    <div id="chat-container">
+        <input type="text" id="chat-input" placeholder="Ask your assistant..." />
+        <button id="chat-button">Send</button>
+    </div>
+    <div id="response-container" style="display: none;"></div>
+    <script>
+        // Set up the scene, camera, and renderer
+        const scene = new THREE.Scene();
+
+        // Add ambient light
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        // Add point light
+        const pointLight = new THREE.PointLight(0xffffff, 0.5);
+        pointLight.position.set(5, 10, 5);
+        scene.add(pointLight);
+
+        const camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // OrbitControls to allow user interaction
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+        // Create room (floor and walls)
+        const room = new THREE.Group();
+
+        // Floor
+        const floorGeometry = new THREE.PlaneGeometry(20, 20);
+        const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        room.add(floor);
+
+        // Walls
+        const wallGeometry = new THREE.PlaneGeometry(20, 10);
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.BackSide });
+
+        const backWall = new THREE.Mesh(wallGeometry, wallMaterial);
+        backWall.position.z = -10;
+        backWall.position.y = 5;
+        room.add(backWall);
+
+        const leftWall = new THREE.Mesh(wallGeometry, wallMaterial);
+        leftWall.rotation.y = Math.PI / 2;
+        leftWall.position.x = -10;
+        leftWall.position.y = 5;
+        room.add(leftWall);
+
+        const rightWall = new THREE.Mesh(wallGeometry, wallMaterial);
+        rightWall.rotation.y = -Math.PI / 2;
+        rightWall.position.x = 10;
+        rightWall.position.y = 5;
+        room.add(rightWall);
+
+        scene.add(room);
+
+        // Add a computer desk (simple box)
+        const deskGeometry = new THREE.BoxGeometry(4, 0.2, 2);
+        const deskMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+        const desk = new THREE.Mesh(deskGeometry, deskMaterial);
+        desk.position.set(0, 1, -5);
+        scene.add(desk);
+
+        // Add a computer monitor (simple box)
+        const monitorGeometry = new THREE.BoxGeometry(1.5, 1, 0.1);
+        const monitorMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+        const monitor = new THREE.Mesh(monitorGeometry, monitorMaterial);
+        monitor.position.set(0, 2, -5.9);
+        scene.add(monitor);
+
+        // Assistant character (simple sphere)
+        const assistantGroup = new THREE.Group();
+        let assistantMesh;
+        function createAssistant(type) {
+            assistantGroup.clear();
+            let material;
+            switch (type) {
+                case 'Cat':
+                    material = new THREE.MeshStandardMaterial({ color: 0xffa500 }); // Orange
+                    assistantMesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), material);
+                    break;
+                case 'Bird':
+                    material = new THREE.MeshStandardMaterial({ color: 0x3498db }); // Blue
+                    assistantMesh = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1, 32), material);
+                    break;
+                case 'Robot':
+                    material = new THREE.MeshStandardMaterial({ color: 0x95a5a6 }); // Grey
+                    assistantMesh = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), material);
+                    break;
+            }
+            assistantMesh.position.y = 0.5;
+            assistantGroup.add(assistantMesh);
+        }
+        createAssistant('Cat');
+        assistantGroup.position.set(-2, 1, -3);
+        scene.add(assistantGroup);
+
+        // Position the camera
+        camera.position.set(0, 2, 5);
+        controls.update();
+
+        // GUI parameters
+        const params = {
+            floorColor: '#808080',
+            wallColor: '#ffffff',
+            addFurniture: 'Chair',
+            furnitureList: [],
+            assistantVisible: true,
+            assistantType: 'Cat',
+            addRoom: function() {
+                addNewRoom();
+            }
+        };
+
+        // GUI setup
+        const gui = new dat.GUI({ autoPlace: false });
+        document.getElementById('gui-container').appendChild(gui.domElement);
+
+        const roomFolder = gui.addFolder('Room Customization');
+        roomFolder.addColor(params, 'floorColor').name('Floor Color').onChange(function(value) {
+            floorMaterial.color.set(value);
+        });
+        roomFolder.addColor(params, 'wallColor').name('Wall Color').onChange(function(value) {
+            wallMaterial.color.set(value);
+        });
+        roomFolder.add(params, 'addRoom').name('Add Room');
+        roomFolder.open();
+
+        const furnitureFolder = gui.addFolder('Furniture');
+        furnitureFolder.add(params, 'addFurniture', ['Chair', 'Table', 'Lamp']).name('Select Furniture');
+        furnitureFolder.add({ add: addFurniture }, 'add').name('Add Furniture');
+        furnitureFolder.open();
+
+        const assistantFolder = gui.addFolder('Assistant');
+        assistantFolder.add(params, 'assistantVisible').name('Show Assistant').onChange(function(value) {
+            if (value) {
+                scene.add(assistantGroup);
+            } else {
+                scene.remove(assistantGroup);
+            }
+        });
+        assistantFolder.add(params, 'assistantType', ['Cat', 'Bird', 'Robot']).name('Assistant Type').onChange(function(value) {
+            createAssistant(value);
+        });
+        assistantFolder.open();
+
+        // Functions to add furniture
+        function addFurniture() {
+            let furniture;
+            switch (params.addFurniture) {
+                case 'Chair':
+                    furniture = createChair();
+                    break;
+                case 'Table':
+                    furniture = createTable();
+                    break;
+                case 'Lamp':
+                    furniture = createLamp();
+                    break;
+            }
+            if (furniture) {
+                furniture.position.set(0, 0, 0);
+                scene.add(furniture);
+                params.furnitureList.push(furniture);
+            }
+        }
+
+        function createChair() {
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const material = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const chair = new THREE.Mesh(geometry, material);
+            chair.position.y = 0.5;
+            return chair;
+        }
+
+        function createTable() {
+            const geometry = new THREE.BoxGeometry(2, 0.2, 1);
+            const material = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const table = new THREE.Mesh(geometry, material);
+            table.position.y = 0.1;
+            return table;
+        }
+
+        function createLamp() {
+            const geometry = new THREE.ConeGeometry(0.2, 0.5, 32);
+            const material = new THREE.MeshStandardMaterial({ color: 0xffff00 });
+            const lamp = new THREE.Mesh(geometry, material);
+            lamp.position.y = 1;
+            return lamp;
+        }
+
+        // Function to add new room
+        function addNewRoom() {
+            const newRoom = room.clone();
+            newRoom.position.x += 20 * (Math.random() > 0.5 ? 1 : -1);
+            scene.add(newRoom);
+        }
+
+        // Assistant interaction
+        const chatInput = document.getElementById('chat-input');
+        const chatButton = document.getElementById('chat-button');
+        const responseContainer = document.getElementById('response-container');
+
+        chatButton.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        async function sendMessage() {
+            const message = chatInput.value.trim();
+            if (message === '') return;
+            chatInput.value = '';
+            displayResponse("Thinking...");
+            animateAssistant();
+
+            try {
+                const responseData = await getAIResponse(message);
+                displayResponse(responseData.reply);
+            } catch (error) {
+                console.error('Error fetching AI response:', error);
+                displayResponse('Sorry, something went wrong.');
+            }
+        }
+
+        function displayResponse(text) {
+            responseContainer.style.display = 'block';
+            responseContainer.textContent = text;
+        }
+
+        function animateAssistant() {
+            // Simple animation: rotate the assistant when responding
+            new TWEEN.Tween(assistantGroup.rotation)
+                .to({ y: assistantGroup.rotation.y + Math.PI * 2 }, 1000)
+                .easing(TWEEN.Easing.Quadratic.Out)
+                .start();
+        }
+
+        async function getAIResponse(userMessage) {
+            try {
+                const response = await fetch('/api/ai_completion', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: `You are a friendly assistant in a virtual 3D home environment. Respond to the user's message in a helpful and engaging way.
+
+<typescript-interface>
+interface Response {
+  reply: string;
+}
+</typescript-interface>
+<example>
+{
+  "reply": "Hello! How can I assist you today in your virtual home?"
+}
+</example>
+`,
+                        data: userMessage
+                    }),
+                });
+                const data = await response.json();
+                if (data.reply) {
+                    return data;
+                } else {
+                    throw new Error('Invalid response format');
+                }
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            TWEEN.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+    </script>
+</body>
+</html>
